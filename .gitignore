@@ -1,0 +1,6 @@
+/static/
+/models/
+
+*.jpeg
+/assets/teestrate/
+/.idea
