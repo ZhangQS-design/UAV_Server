@@ -2,5 +2,8 @@
 /models/
 
 *.jpeg
+*.jpg
+*.png
+*.npy
 /assets/teestrate/
 /.idea

@@ -9,7 +9,7 @@ import os
 import hashlib
 import zipfile
 from six.moves import urllib
-
+import numpy as np
 
 def readlines(filename):
     """Read all the lines in a text file and return as a list
@@ -18,6 +18,13 @@ def readlines(filename):
         lines = f.read().splitlines()
     return lines
 
+def Normalize(data):
+    #ret = [[0 for i in range(len(data[0]))] for i in range(len(data))]
+    p = np.array(data)
+    mx = np.max(data)
+    mn = np.min(data)
+    d = (p - mn) / (mx - mn)
+    return d
 
 def normalize_image(x):
     """Rescale image pixels to span range [0, 1]

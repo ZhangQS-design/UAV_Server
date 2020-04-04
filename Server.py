@@ -7,9 +7,13 @@ import json
 import time
 from pynput.keyboard import Listener
 import math
+from server.server.RelaDeepEnergyHandler import RelaDeepEnergyHandler
+from server.server.utils import download_model_if_doesnt_exist, Normalize
+
+handleImageCondition = threading.Condition()
 
 image_center = [320,180]
-images =[]
+images =[""]
 track_result=[]
 movement_sequance=[]
 pre_box=None
@@ -19,9 +23,15 @@ app = Flask(__name__)
 move = {"mPitch": 0, "mRoll": 0, "mYaw": 0, "mThrottle": 0, "gPitch": 0, "gRoll": 0,
                                     "gYaw": 0 , "handleImageName": ""}
 
+state = {'statePitch': 0, 'stateRoll': 0, 'stateYaw': 0, 'velocityX': 0, 'velocityY': 0, 'velocityZ': 0}
+
+import datetime
 con_image = threading.Condition()
 con_track = threading.Condition()
 con_result = threading.Condition()
+
+
+imageNameLock=threading.Lock() #申请一把锁
 
 '''
 trackers={
@@ -36,7 +46,7 @@ trackers={
 '''
 key ='DSST'
 
-nameit = 'deepEstbasetree2'
+nameit = 'deepEstCon2'
 
 indirectpath = os.path.join(basepath, 'static')
 indirectpath = os.path.join(indirectpath, 'images')
@@ -53,7 +63,19 @@ def hello_world():
 def upload():
     return "ok"
 
-lastUploadImageTime = 0
+lastUploadImageTime = datetime.datetime.now()
+
+@app.route('/uploadState',methods=['POST', 'GET'])
+def uploadState():
+    global rotation
+    global state
+    droneState = request.json
+    print(droneState)
+    state = droneState
+    rotation = droneState['stateYaw']
+    return "ok"
+
+
 
 @app.route('/uploadImage',methods=['POST', 'GET'])
 def uploadImage():
@@ -64,6 +86,7 @@ def uploadImage():
     filename = f.filename
     global basepath
     global lastUploadImageTime
+    global handleImageCondition
     indirectpath = os.path.join(basepath, 'static')
     indirectpath = os.path.join(indirectpath, 'images')
     it = os.path.join(indirectpath, nameit)
@@ -71,8 +94,15 @@ def uploadImage():
         os.mkdir(it)
     upload_path = os.path.join(indirectpath, nameit,filename)  # 注意：没有的文件夹一定要先创建，不然会提示没有该路径
     #print(upload_path)
+
+    imageNameLock.acquire()
     f.save(upload_path)
-    images.append(upload_path)
+    #images.append(upload_path)
+    images[0] = upload_path
+    imageNameLock.release()
+    with handleImageCondition:
+        handleImageCondition.notify()
+
     endtime = datetime.datetime.now()
     internaltime = (endtime - lastUploadImageTime).total_seconds()
     lastUploadImageTime = endtime
@@ -88,7 +118,7 @@ def uploadImage():
 
 @app.route('/getcontrol',methods=['POST', 'GET'])
 def getcontrol():
-    print(move)
+    #print(move)
     return json.dumps(move)
 
 
@@ -97,26 +127,35 @@ def load_images():
     global pre_box
     global move
     global original_area
+    global handleImageCondition
     start_tracking = False
     first = True
     conter = 0
     tracker=None
     print("start handle image")
     while True:
+        '''
        # if con_image.acquire():
             # 当获得条件变量后
-            if len(images)==0:
+              # if con_image.acquire():
+            # 当获得条件变量后
+            if images[0]=="":
                 # 图像缓存中没有图片
                 #print("it has been zero")
                 #con_image.wait()
-                time.sleep(0.08)
+                time.sleep(0.1)
+                print("陷入等待")
                 # 该进程处于wait状态
 
             else:
-                # 图像缓存中有图片
-                # 取出图片并显示
-                picpath = images[0]
-                images.remove(picpath)
+                handleImageCondition.wait()
+                imageNameLock.acquire()
+                if images[0] == "":
+                    imageNameLock.release()
+                    continue
+                else:
+                    picpath = images[0]
+                    images[0] = ""
 
                 img = cv2.imread(picpath)
                 img = cv2.resize(img, (640, 360))
@@ -133,7 +172,7 @@ def load_images():
                 conter+=1
         # 条件变量释放
         #con_image.release()
-
+'''
 
 #from __future__ import absolute_import, division, print_function
 
@@ -153,19 +192,25 @@ from torchvision import transforms, datasets
 import server.server.networks as networks
 from server.server.layers import disp_to_depth
 from server.server.utils import download_model_if_doesnt_exist
+initrotation = -90
+rotation = initrotation
 
-
+countstep = 0
 def load_images_use_DE():
     """Function to predict for a single image or folder of images
     """
     global images
+    global  rotation
     global pre_box
     global move
     global original_area
     global basepath
+    global  countstep
     indirectpath = os.path.join(basepath, 'static')
     indirectpath = os.path.join(indirectpath, 'images')
     indirectpath = os.path.join(indirectpath, nameit)
+
+    agent = RelaDeepEnergyHandler((768,1024))
 
     if torch.cuda.is_available() :#cuda可以做到1秒5张以上，而cpu大概是1秒1张
         device = torch.device("cuda")
@@ -219,21 +264,25 @@ def load_images_use_DE():
         idx = 0
         print("图片处理加载完成")
         while True:
-       # if con_image.acquire():
-            # 当获得条件变量后
-            if len(images)==0:
-                # 图像缓存中没有图片
-                #print("it has been zero")
-                #con_image.wait()
-                time.sleep(0.08)
-                print("陷入等待")
-                # 该进程处于wait状态
+            with handleImageCondition:
+                handleImageCondition.wait()
+                imageNameLock.acquire()
+                if images[0] == "":
+                    imageNameLock.release()
+                    continue
+                else:
+                    picpath = images[0]
+                    images[0] = ""
+                    imageNameLock.release()
 
-            else:
                 starttime = datetime.datetime.now()
+                """
                 image_path = images[0]
                 images.remove(image_path)
-                input_image = pil.open(image_path).convert('RGB')
+                """
+
+                input_image = pil.open(picpath).convert('RGB')
+                image_path = picpath
 
 
 
@@ -259,6 +308,10 @@ def load_images_use_DE():
             # Saving colormapped depth image
                 disp_resized_np = disp_resized.squeeze().cpu().numpy()
 
+                matrix = Normalize(disp_resized_np)
+                angle = agent.getRelaDeep2(matrix, 290, 470)
+                print("angle {}".format(angle))
+
                 vmax = np.percentile(disp_resized_np, 95) # 锁掉最大的max
                 normalizer = mpl.colors.Normalize(vmin=disp_resized_np.min(), vmax=vmax) # 等比例缩放 最小无限 Normlize是用来把数据标准化(归一化)到[0,1]这个期间内,vmin是设置最小值, vmax是设置最大值
                 mapper = cm.ScalarMappable(norm=normalizer, cmap='magma')# mapper? cm? 归一化后配色方案
@@ -272,6 +325,27 @@ def load_images_use_DE():
                 internaltime = (endtime - starttime).total_seconds()
                 print("  need time {} Processed {:d}  images - saved prediction to {}".format(internaltime ,
                 idx + 1, name_dest_im))
+                global initrotation
+                if countstep % 10 == 0:
+                    rotation = initrotation
+                else:
+                    rotation += angle
+                if rotation > 180:
+                    rotation -= 360
+                if rotation < -180:
+                    rotation += 360
+                move['mPitch'] = 0
+                move['mRoll'] = 0.15
+                move['mYaw'] = rotation
+                countstep += 1
+
+
+
+                move['handleImageName'] = picpath
+                print("Now action mYaw {} mPitch {} mRoll{} handleImageName{}".format(move['mYaw'], move['mPitch'], move['mRoll'],move['handleImageName']))
+
+
+
 
 
 def area(b):
@@ -287,37 +361,26 @@ def infer_track_result(p_b,b):
 
 def press(key):
       print(key.char)
-      if key.char == 'a':
-          move['mYaw'] -= 10
-          print("yaw down{}".format(move['mYaw']))
-      if key.char == 'd':
-          move['mYaw'] += 10
-          print("yaw up{}".format(move['mYaw']))
-      if key.char == 's':
+      if key.char == 'j':
           move['mPitch'] -= 0.1
           print("pitch down{}".format(move['mPitch']))
-      if key.char == 'w':
+      if key.char == 'l':
           move['mPitch'] += 0.1
           print("pitch up{}".format(move['mPitch']))
-      if key.char == 'q':
-          move['mRoll'] -= 0.1
-          print("roll down{}".format(move['mRoll']))
-      if key.char == 'e':
-          move['mRoll'] += 0.1
-          print("roll up{}".format(move['mRoll']))
-      if key.char == 'g':
-          move['mThrottle'] -= 1
+      if key.char == 'k':
+          move['mThrottle'] -= 0.5
           print("high down{}".format(move['mThrottle']))
-      if key.char == 't':
-          move['mThrottle'] += 1
+      if key.char == 'i':
+          move['mThrottle'] += 0.5
           print("high up{}".format(move['mThrottle']))
-      if key.char == 'u':
+      if key.char == 'p':
           move['mYaw'] = 0
           move['mPitch'] = 0
           move['mRoll'] = 0
           move['mThrottle'] = 0
-
+          move['handleImageName'] = ""
           print("reset")
+
 
 
 def listen():
@@ -334,7 +397,7 @@ class myThread (threading.Thread):   #继承父类threading.Thread
         self.func = func
         self.param = param
     def run(self):                   #把要执行的代码写到run函数里面 线程在创建后会直接运行run函数
-        print(self.func)
+        #print(self.func)
         if self.param==None:
             self.func()
         else:
@@ -353,7 +416,7 @@ if __name__ == '__main__':
     thread2 = myThread(2,"show", load_images_use_DE)#load_images)
     thread1 = myThread(1,"flask",app.run,'0.0.0.0')
 
-    thread3.start()
+    #thread3.start()
     thread1.start()
     thread2.start()
 

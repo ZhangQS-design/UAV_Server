@@ -17,10 +17,12 @@ import matplotlib.cm as cm
 
 import torch
 from torchvision import transforms, datasets
+from server.server.RelaDeepEnergyHandler import RelaDeepEnergyHandler
 
 import server.server.networks as networks
 from server.server.layers import disp_to_depth
-from server.server.utils import download_model_if_doesnt_exist
+from server.server.utils import download_model_if_doesnt_exist, Normalize
+
 
 
 def parse_args():
@@ -28,7 +30,7 @@ def parse_args():
         description='Simple testing funtion for Monodepthv2 models.')
 
     parser.add_argument('--image_path', type=str,
-                        help='path to a test image or folder of images', default= "assets/ScreenShot_1584354552045_disp.jpeg")
+                        help='path to a test image or folder of images', default= "assets/ScreenShot_1584354772124.jpg")
     parser.add_argument('--model_name', type=str,
                         help='name of a pretrained model to use',
                         choices=[
@@ -139,6 +141,8 @@ def test_simple(args):
             print(scaled_disp)
             print(scaled_disp.max())
             print(scaled_disp.min())
+            print(scaled_disp.size())
+
             print("depth")
             print(depth)
             print(depth.size())
@@ -150,9 +154,27 @@ def test_simple(args):
             disp_resized_np = disp_resized.squeeze().cpu().numpy()
             print("disp_resized_np")
             print(disp_resized_np)
+            print(len(disp_resized_np))
+            print(len(disp_resized_np[0]))
+            matrix = Normalize(disp_resized_np)
+
+
+
+
+            print("matrix")
+            print(matrix)
+            print(matrix.shape)
+            #print(len(matrix))
+            #print(len(matrix[0]))
+            agent = RelaDeepEnergyHandler(matrix.shape)
+            angle = agent.getRelaDeep(matrix, 250, 460)
+            print("angle")
+            print(angle)
+
             vmax = np.percentile(disp_resized_np, 95)
             normalizer = mpl.colors.Normalize(vmin=disp_resized_np.min(), vmax=vmax)
             print("normalizer")
+            #print(normalizer.len)
             print(normalizer)
             mapper = cm.ScalarMappable(norm=normalizer, cmap='magma')
             colormapped_im = (mapper.to_rgba(disp_resized_np)[:, :, :3] * 255).astype(np.uint8)
