@@ -11,9 +11,14 @@ class RelaDeepEnergyHandler:
         self.imageSize = imageSize
         self.thredhold = 0.57 # 0.5远或者无问题 0.55 开始代表远处或看不清的近处 0.6 开始存在危险  0.75 危险 0.85 可能高危
         self.thredholddanger = 0.75
+        self.move = {"mPitch": 0, "mRoll": 0, "mYaw": 0, "mThrottle": 0, "gPitch": 0, "gRoll": 0,
+                                    "gYaw": 0 , "handleImageName": ""}
+        self.initrotation = -90
+        self.rotation = self.initrotation
+        self.countstep = 0
 
 
-    def getRelaDeep(self, state, uprange, downrange):
+    def getRelaDeep(self, state, uprange, downrange,picpath):
 
 
         smoothLineSee = self.caculateObs(state, uprange, downrange)
@@ -24,7 +29,24 @@ class RelaDeepEnergyHandler:
             angle = self.getAngle(directIndex, len(canGo))
         else:
             angle = -50 # 大转逃避
-        return angle
+
+
+        if self.countstep % 10 == 0:
+                self.rotation = self.initrotation
+        else:
+                self.rotation += angle
+                if self.rotation > 180:
+                    self.rotation -= 360
+                if self.rotation < -180:
+                    self.rotation += 360
+                self.move['mPitch'] = 0
+                self.move['mRoll'] = 0.15
+                self.move['mYaw'] = self.rotation
+                self.countstep += 1
+
+        self.move['handleImageName'] = picpath
+        print("Now action mYaw {} mPitch {} mRoll{} handleImageName{}".format(self.move['mYaw'], self.move['mPitch'], self.move['mRoll'],self.move['handleImageName']))
+        return self.move
 
     def getRelaDeep2(self, state, uprange, downrange):
 

@@ -7,8 +7,8 @@ import json
 import time
 from pynput.keyboard import Listener
 import math
-from server.server.RelaDeepEnergyHandler import RelaDeepEnergyHandler
-from server.server.utils import download_model_if_doesnt_exist, Normalize
+from server.handler.RelaDeepEnergyHandler import RelaDeepEnergyHandler
+from server.utils import download_model_if_doesnt_exist, Normalize
 
 handleImageCondition = threading.Condition()
 
@@ -189,9 +189,9 @@ import datetime
 import torch
 from torchvision import transforms, datasets
 
-import server.server.networks as networks
-from server.server.layers import disp_to_depth
-from server.server.utils import download_model_if_doesnt_exist
+import server.networks as networks
+from server.layers import disp_to_depth
+from server.utils import download_model_if_doesnt_exist
 initrotation = -90
 rotation = initrotation
 
@@ -309,8 +309,10 @@ def load_images_use_DE():
                 disp_resized_np = disp_resized.squeeze().cpu().numpy()
 
                 matrix = Normalize(disp_resized_np)
-                angle = agent.getRelaDeep2(matrix, 290, 470)
-                print("angle {}".format(angle))
+                moveit = agent.getRelaDeep2(matrix, 290, 470, picpath)
+                print("moveit {}".format(moveit))
+                move = moveit
+                print("final move {}".format(move))
 
                 vmax = np.percentile(disp_resized_np, 95) # 锁掉最大的max
                 normalizer = mpl.colors.Normalize(vmin=disp_resized_np.min(), vmax=vmax) # 等比例缩放 最小无限 Normlize是用来把数据标准化(归一化)到[0,1]这个期间内,vmin是设置最小值, vmax是设置最大值
@@ -325,24 +327,6 @@ def load_images_use_DE():
                 internaltime = (endtime - starttime).total_seconds()
                 print("  need time {} Processed {:d}  images - saved prediction to {}".format(internaltime ,
                 idx + 1, name_dest_im))
-                global initrotation
-                if countstep % 10 == 0:
-                    rotation = initrotation
-                else:
-                    rotation += angle
-                if rotation > 180:
-                    rotation -= 360
-                if rotation < -180:
-                    rotation += 360
-                move['mPitch'] = 0
-                move['mRoll'] = 0.15
-                move['mYaw'] = rotation
-                countstep += 1
-
-
-
-                move['handleImageName'] = picpath
-                print("Now action mYaw {} mPitch {} mRoll{} handleImageName{}".format(move['mYaw'], move['mPitch'], move['mRoll'],move['handleImageName']))
 
 
 
