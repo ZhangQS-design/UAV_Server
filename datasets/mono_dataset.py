@@ -1,9 +1,3 @@
-# Copyright Niantic 2019. Patent Pending. All rights reserved.
-#
-# This software is licensed under the terms of the Monodepth2 licence
-# which allows for non-commercial use only, the full terms of which are made
-# available in the LICENSE file.
-
 from __future__ import absolute_import, division, print_function
 
 import os
@@ -16,6 +10,7 @@ import torch
 import torch.utils.data as data
 from torchvision import transforms
 
+# 负责根据其顺序加载数据集，并放入训练 预处理及数据增强
 
 def pil_loader(path):
     # open path as file to avoid ResourceWarning
@@ -143,7 +138,7 @@ class MonoDataset(data.Dataset):
         line = self.filenames[index].split()
         folder = line[0]
 
-        if len(line) == 3:
+        if len(line) >= 2:
             frame_index = int(line[1])
         else:
             frame_index = 0

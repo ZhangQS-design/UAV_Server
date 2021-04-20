@@ -88,12 +88,17 @@ class KITTIOdomDataset(KITTIDataset):
 
     def get_image_path(self, folder, frame_index, side):
         f_str = "{:06d}{}".format(frame_index, self.img_ext)
+        image_path = os.path.join( self.data_path, "data_odometry_color")
+        image_path = os.path.join( image_path, "dataset")
+        image_path = os.path.join( image_path, "sequences")
         image_path = os.path.join(
-            self.data_path,
-            "sequences/{:02d}".format(int(folder)),
+            image_path,
+            "{:02d}".format(int(folder)),
             "image_{}".format(self.side_map[side]),
             f_str)
         return image_path
+
+
 
 
 class KITTIDepthDataset(KITTIDataset):
